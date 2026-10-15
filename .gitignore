@@ -1,0 +1,6 @@
+session.txt
+cookies.txt
+*.log
+flow_result.json
+last_run.json
+__pycache__/
