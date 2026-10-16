@@ -80,13 +80,31 @@ no_browser = "--no-browser" in sys.argv
 result = {"ts": dt.datetime.now(dt.UTC).isoformat(), "claimed": None, "upgrades": 0,
           "checkin": None, "level": None, "cache": None, "balance": None, "errors": []}
 
+def refresh_session():
+    """Run cap_flow.py (real Chrome + xvfb) to re-establish the ~12h game session."""
+    log("session stale — refreshing via cap_flow.py (real Chrome)")
+    try:
+        subprocess.run(["xvfb-run", "-a", "/usr/bin/python3", "/root/dac-bot/cap_flow.py"],
+                       timeout=200, capture_output=True)
+    except subprocess.TimeoutExpired:
+        log("cap_flow.py timed out")
+        return False
+    st = game_state()
+    return bool(st.get("success"))
+
 st = game_state()
 if not st.get("success"):
     code = st.get("error", {}).get("code")
-    log(f"FATAL: game state failed: {code}")
-    result["errors"].append(code)
-    json.dump(result, open(RESULT, "w"), indent=1)
-    sys.exit(1)
+    log(f"game state failed: {code}")
+    if code in ("GAME_HUMAN_CHECK_REQUIRED", "PERMISSION_DENIED") and not no_browser:
+        if refresh_session():
+            st = game_state()
+        else:
+            log("FATAL: session refresh failed")
+    if not st.get("success"):
+        result["errors"].append(code)
+        json.dump(result, open(RESULT, "w"), indent=1)
+        sys.exit(1)
 
 d = st["data"]
 chip, cache, bal = d["chip"], d["cache"], d["qe_balance"]
